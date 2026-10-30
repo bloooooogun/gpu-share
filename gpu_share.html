@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU Share</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --ink:#1d2433; --muted:#667085; --line:#e4e7ec;
+  --brand:#1f3a5f; --brand-soft:#e8eef6; --ok:#2f7d4f; --ok-soft:#e6f4ec;
+  --warn:#b7791f; --warn-soft:#fdf3e1; --bad:#b23b3b; --bad-soft:#fbeaea;
+  --c0:#3b6ea5; --c1:#2f7d4f; --c2:#b7791f; --c3:#7a4fa3; --c4:#b23b3b; --c5:#2a8a8a; --c6:#6b6b6b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Pretendard","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;font-size:14px}
+header{background:var(--brand);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;font-weight:700}
+header .sub{opacity:.8;font-size:12.5px}
+main{max-width:1180px;margin:0 auto;padding:16px;display:grid;grid-template-columns:330px 1fr;gap:16px}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card h2{font-size:14.5px;margin:0 0 10px;color:var(--brand)}
+.status{display:flex;flex-direction:column;gap:6px}
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-weight:700;font-size:12.5px}
+.badge.busy{background:var(--bad-soft);color:var(--bad)} .badge.free{background:var(--ok-soft);color:var(--ok)}
+.muted{color:var(--muted);font-size:12.5px}
+label{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 3px}
+input,select,textarea{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;background:#fff}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{font:inherit;border:0;border-radius:6px;padding:8px 12px;cursor:pointer}
+.primary{background:var(--brand);color:#fff;width:100%;margin-top:12px;font-weight:700}
+.ghost{background:var(--brand-soft);color:var(--brand)}
+.msg{margin-top:8px;padding:8px 10px;border-radius:6px;font-size:12.5px;display:none}
+.msg.err{display:block;background:var(--bad-soft);color:var(--bad)}
+.msg.warn{display:block;background:var(--warn-soft);color:var(--warn)}
+.msg.ok{display:block;background:var(--ok-soft);color:var(--ok)}
+.weekbar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.weekbar strong{font-size:14px}
+.cal{display:grid;grid-template-columns:44px repeat(7,1fr);border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.cal .h{background:#f2f4f7;font-size:12px;text-align:center;padding:6px 0;border-bottom:1px solid var(--line);font-weight:600}
+.cal .h.today{background:var(--brand-soft);color:var(--brand)}
+.tcol{position:relative;border-right:1px solid var(--line)}
+.tlabel{height:20px;font-size:10.5px;color:var(--muted);text-align:right;padding-right:4px;border-bottom:1px dashed #f0f1f3}
+.day{position:relative;border-right:1px solid var(--line);background:repeating-linear-gradient(#fff 0 19px,#f0f1f3 19px 20px)}
+.day.today{background:repeating-linear-gradient(#fbfcfe 0 19px,#eef1f6 19px 20px)}
+.block{position:absolute;border-radius:5px;color:#fff;font-size:11px;padding:2px 4px;overflow:hidden;line-height:1.25;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.nowline{position:absolute;left:0;right:0;height:2px;background:var(--bad);z-index:3}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+.vbar{height:10px;border-radius:5px;background:#e8ebef;display:flex;overflow:hidden;margin:4px 0}.vbar>span{height:100%}
+.bar{height:8px;border-radius:4px;background:var(--brand)}
+.rules li{margin:3px 0}
+.right{display:flex;flex-direction:column;gap:16px}
+.left{display:flex;flex-direction:column;gap:16px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header>
+  <h1>GPU Share</h1>
+  <span class="sub">연구실 서버 · RTX 4090 × 1 (24GB) · 사용자 7명</span>
+</header>
+<main>
+  <div class="left">
+    <section class="card" id="statusCard">
+      <h2>지금 GPU 상태</h2>
+      <div class="status" id="status"></div>
+    </section>
+
+    <section class="card">
+      <h2>예약 신청</h2>
+      <label for="who">사용자</label>
+      <select id="who"></select>
+      <div class="row">
+        <div><label for="sDate">시작 날짜</label><input type="date" id="sDate"></div>
+        <div><label for="sTime">시작 시각</label><input type="time" id="sTime" step="1800"></div>
+      </div>
+      <div class="row">
+        <div><label for="eDate">종료 날짜</label><input type="date" id="eDate"></div>
+        <div><label for="eTime">종료 시각</label><input type="time" id="eTime" step="1800"></div>
+      </div>
+      <div class="row">
+        <div><label for="purpose">용도</label>
+          <select id="purpose"><option>학습</option><option>추론·평가</option><option>디버깅</option><option>기타</option></select></div>
+        <div><label for="vram">예상 VRAM (GB)</label><input type="number" id="vram" min="1" max="24" value="16"></div>
+      </div>
+      <label for="memo">메모 (선택)</label>
+      <input id="memo" placeholder="예: DeiT-B 평가 50K">
+      <button class="primary" id="submit">예약하기</button>
+      <div class="msg" id="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>사용 규칙 <span class="muted">(초안 · 연구실 합의 전 예시)</span></h2>
+      <ul class="rules muted" id="rules"></ul>
+    </section>
+  </div>
+
+  <div class="right">
+    <section class="card">
+      <div class="weekbar">
+        <button class="ghost" id="prev">◀ 이전 주</button>
+        <strong id="weekLabel"></strong>
+        <button class="ghost" id="next">다음 주 ▶</button>
+        <button class="ghost" id="thisWeek">이번 주</button>
+      </div>
+      <div class="cal" id="cal"></div>
+    </section>
+
+    <section class="card">
+      <h2>예약 목록 (이번 주 표시 범위)</h2>
+      <table id="list"></table>
+    </section>
+
+    <section class="card">
+      <h2>이번 주 사용 시간</h2>
+      <table id="stats"></table>
+    </section>
+  </div>
+</main>
+
+<script>
+const MEMBERS = ["사용자 A","사용자 B","사용자 C","사용자 D","사용자 E","사용자 F","사용자 G"];
+const COLORS  = ["--c0","--c1","--c2","--c3","--c4","--c5","--c6"];
+const RULES = { maxHours: 12, maxPerDayPerPerson: 1, nightLongJobsFrom: 20, nightLongJobsTo: 9, vramMax: 24, maxConcurrent: 3 };
+const KEY = "gpuboard.v3";
+
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2,"0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const hm  = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const startOfWeek = d => { const x = new Date(d); x.setHours(0,0,0,0); const k=(x.getDay()+6)%7; x.setDate(x.getDate()-k); return x; };
+const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const DAYS = ["월","화","수","목","금","토","일"];
+
+function load(){
+  try { const s = localStorage.getItem(KEY); if (s) return JSON.parse(s); } catch(e){}
+  return seed();
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
+function seed(){
+  const now = new Date(); const t = new Date(now); t.setMinutes(0,0,0);
+  const mk = (who, dayOff, sh, eh, purpose, memo, vram) => {
+    const s = new Date(t); s.setDate(s.getDate()+dayOff); s.setHours(sh,0,0,0);
+    const e = new Date(t); e.setDate(e.getDate()+dayOff + (eh<=sh?1:0)); e.setHours(eh,0,0,0);
+    return {id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()), who, start:s.getTime(), end:e.getTime(), purpose, memo, vram};
+  };
+  const h = now.getHours();
+  return { res: [
+    mk("사용자 C", 0, Math.max(0,h-2), Math.min(23,h+2), "학습", "ViT-S 파인튜닝", 20),
+    mk("사용자 G", 0, Math.max(0,h-1), Math.min(23,h+3), "추론·평가", "소형 모델 추론", 4),
+    mk("사용자 A", 0, 20, 8, "추론·평가", "DeiT-B ImageNet 50K 평가", 18),
+    mk("사용자 B", 1, 10, 14, "디버깅", "커널 프로파일링", 8),
+    mk("사용자 E", 2, 13, 19, "학습", "", 22),
+    mk("사용자 D", -1, 9, 13, "추론·평가", "", 12),
+  ]};
+}
+let state = load();
+let weekStart = startOfWeek(new Date());
+
+function overlaps(a, b){ return a.start < b.end && b.start < a.end; }
+
+// [s,e) 구간 안에서 동시에 겹치는 예약들의 VRAM 합계·인원의 최댓값
+function peak(list, s, e){
+  const pts = [s, ...list.map(x => x.start).filter(t => t > s && t < e)];
+  let vram = 0, count = 0;
+  pts.forEach(t => { const on = list.filter(x => x.start <= t && t < x.end);
+    vram = Math.max(vram, on.reduce((a,x)=>a+x.vram,0)); count = Math.max(count, on.length); });
+  return {vram, count};
+}
+
+function validate(r){
+  const errs = [], warns = [];
+  if (!(r.end > r.start)) errs.push("종료 시각이 시작 시각보다 늦어야 합니다.");
+  if (r.end <= Date.now()) errs.push("이미 지난 시간대는 예약할 수 없습니다.");
+  const hours = (r.end - r.start)/3.6e6;
+  if (hours > RULES.maxHours) errs.push(`1회 예약은 최대 ${RULES.maxHours}시간입니다 (신청: ${hours.toFixed(1)}시간).`);
+  if (!(r.vram >= 1 && r.vram <= RULES.vramMax)) errs.push(`예상 VRAM은 1~${RULES.vramMax}GB 범위로 입력하세요.`);
+  const clash = state.res.filter(x => overlaps(x, r));
+  if (clash.length) {
+    const pk = peak(clash, r.start, r.end);
+    if (pk.vram + r.vram > RULES.vramMax)
+      errs.push(`같은 시간대 VRAM 합계가 ${RULES.vramMax}GB를 넘습니다 (최대 사용 시점 기존 ${pk.vram}GB + 신청 ${r.vram}GB). 겹치는 예약: ` + clash.map(x => `${x.who} ${fmtRange(x)} ${x.vram}GB`).join(", "));
+    else if (pk.count + 1 > RULES.maxConcurrent)
+      errs.push(`같은 시간대 동시 사용은 최대 ${RULES.maxConcurrent}명입니다.`);
+    else
+      warns.push(`다른 예약과 GPU를 나눠 씁니다 (최대 사용 시점 VRAM ${pk.vram + r.vram}/${RULES.vramMax}GB, ${pk.count + 1}명). 연산 속도가 느려질 수 있습니다: ` + clash.map(x => `${x.who} ${x.vram}GB`).join(", "));
+  }
+  const sameDay = state.res.filter(x => x.who === r.who && ymd(new Date(x.start)) === ymd(new Date(r.start)));
+  if (sameDay.length >= RULES.maxPerDayPerPerson) warns.push(`같은 날 이미 예약이 ${sameDay.length}건 있습니다. 다른 사람의 사용 기회를 고려해 주세요.`);
+  const sh = new Date(r.start).getHours();
+  if (hours >= 6 && !(sh >= RULES.nightLongJobsFrom || sh < RULES.nightLongJobsTo))
+    warns.push(`6시간 이상 장기 작업은 야간(${RULES.nightLongJobsFrom}:00~${RULES.nightLongJobsTo}:00) 시작을 권장합니다.`);
+  return {errs, warns};
+}
+
+function fmtRange(r){
+  const s = new Date(r.start), e = new Date(r.end);
+  const sameDay = ymd(s) === ymd(e);
+  return `${s.getMonth()+1}/${s.getDate()} ${hm(s)}–${sameDay ? "" : (e.getMonth()+1)+"/"+e.getDate()+" "}${hm(e)}`;
+}
+function colorOf(who){ return `var(${COLORS[MEMBERS.indexOf(who) % COLORS.length]})`; }
+
+function renderStatus(){
+  const now = Date.now();
+  const cur = state.res.filter(r => r.start <= now && now < r.end).sort((a,b)=>a.start-b.start);
+  const next = state.res.filter(r => r.start > now).sort((a,b)=>a.start-b.start)[0];
+  const used = cur.reduce((a,r)=>a+r.vram,0);
+  const el = $("status");
+  let h = cur.length
+    ? `<div><span class="badge busy">${cur.length > 1 ? "공유 중 · " + cur.length + "명" : "사용 중"}</span></div>`
+    : `<div><span class="badge free">비어 있음</span></div>`;
+  h += `<div class="muted">예약 VRAM ${used} / ${RULES.vramMax}GB · 남은 VRAM ${RULES.vramMax - used}GB</div>
+    <div class="vbar">${cur.map(r=>`<span title="${r.who} ${r.vram}GB" style="width:${r.vram/RULES.vramMax*100}%;background:${colorOf(r.who)}"></span>`).join("")}</div>`;
+  cur.forEach(r => { const left = Math.ceil((r.end-now)/6e4);
+    h += `<div><span class="dot" style="background:${colorOf(r.who)}"></span><b>${r.who}</b> · ${r.purpose} · ${r.vram}GB
+      <span class="muted">· ${fmtRange(r)} · 남은 ${Math.floor(left/60)}시간 ${left%60}분</span></div>`; });
+  if (!cur.length) h += `<div class="muted">지금 바로 예약할 수 있습니다.</div>`;
+  h += next ? `<div class="muted" style="margin-top:6px">다음 예약: <b>${next.who}</b> ${fmtRange(next)} · ${next.vram}GB</div>` : `<div class="muted">예정된 예약 없음</div>`;
+  h += `<div class="muted" style="font-size:11.5px">※ 예약 기준 값 (실제 GPU 사용량 연동 전)</div>`;
+  el.innerHTML = h;
+}
+
+function renderCal(){
+  const cal = $("cal"); cal.innerHTML = "";
+  const todayStr = ymd(new Date());
+  $("weekLabel").textContent = `${ymd(weekStart)} ~ ${ymd(addDays(weekStart,6))}`;
+  cal.appendChild(Object.assign(document.createElement("div"),{className:"h",textContent:""}));
+  for (let i=0;i<7;i++){
+    const d = addDays(weekStart,i);
+    const h = document.createElement("div");
+    h.className = "h" + (ymd(d)===todayStr ? " today":"");
+    h.textContent = `${DAYS[i]} ${d.getMonth()+1}/${d.getDate()}`;
+    cal.appendChild(h);
+  }
+  const tcol = document.createElement("div"); tcol.className="tcol";
+  for (let hh=0; hh<24; hh++) tcol.appendChild(Object.assign(document.createElement("div"),{className:"tlabel",textContent:pad(hh)}));
+  cal.appendChild(tcol);
+  for (let i=0;i<7;i++){
+    const d0 = addDays(weekStart,i), d1 = addDays(weekStart,i+1);
+    const col = document.createElement("div");
+    col.className = "day" + (ymd(d0)===todayStr ? " today":""); col.style.height = (24*20)+"px";
+    const segs = state.res.map(r => ({r, s: Math.max(r.start, d0.getTime()), e: Math.min(r.end, d1.getTime())}))
+      .filter(x => x.e > x.s).sort((a,b)=>a.s-b.s || a.e-b.e);
+    // 겹치는 예약은 칸을 나눠 나란히 표시
+    let cluster = [], lanesEnd = [], cEnd = -1;
+    const flush = () => { const n = lanesEnd.length; cluster.forEach(x => { x.n = n; }); cluster = []; lanesEnd = []; };
+    segs.forEach(x => {
+      if (x.s >= cEnd) { flush(); cEnd = -1; }
+      let k = lanesEnd.findIndex(t => t <= x.s); if (k < 0) { k = lanesEnd.length; lanesEnd.push(0); }
+      lanesEnd[k] = x.e; x.k = k; cluster.push(x); cEnd = Math.max(cEnd, x.e);
+    });
+    flush();
+    segs.forEach(({r, s, e, k, n}) => {
+      const top = (s - d0.getTime())/3.6e6*20, hgt = (e - s)/3.6e6*20;
+      const b = document.createElement("div"); b.className="block";
+      b.style.left = `calc(${k/n*100}% + 2px)`; b.style.width = `calc(${100/n}% - 4px)`;
+      b.style.top = top+"px"; b.style.height = Math.max(hgt,14)+"px"; b.style.background = colorOf(r.who);
+      b.title = `${r.who} · ${r.purpose} · ${r.vram}GB · ${fmtRange(r)}${r.memo ? " · "+r.memo : ""}`;
+      b.textContent = `${r.who} ${r.purpose} ${r.vram}GB`;
+      col.appendChild(b);
+    });
+    const now = new Date();
+    if (ymd(now)===ymd(d0)) {
+      const nl = document.createElement("div"); nl.className="nowline";
+      nl.style.top = ((now - d0)/3.6e6*20)+"px"; col.appendChild(nl);
+    }
+    cal.appendChild(col);
+  }
+}
+
+function renderList(){
+  const ws = weekStart.getTime(), we = addDays(weekStart,7).getTime();
+  const rows = state.res.filter(r => r.end > ws && r.start < we).sort((a,b)=>a.start-b.start);
+  $("list").innerHTML = `<tr><th>사용자</th><th>시간</th><th>용도</th><th>VRAM</th><th>메모</th><th></th></tr>` +
+    (rows.length ? rows.map(r => `<tr><td><span class="dot" style="background:${colorOf(r.who)}"></span>${r.who}</td>
+      <td>${fmtRange(r)}</td><td>${r.purpose}</td><td>${r.vram}GB</td><td>${r.memo||""}</td>
+      <td><button class="ghost" data-del="${r.id}">취소</button></td></tr>`).join("")
+      : `<tr><td colspan="6" class="muted">이 주에는 예약이 없습니다.</td></tr>`);
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+    state.res = state.res.filter(r => r.id !== b.dataset.del); save(); renderAll();
+    showMsg("ok", "예약을 취소했습니다.");
+  });
+}
+
+function renderStats(){
+  const ws = weekStart.getTime(), we = addDays(weekStart,7).getTime();
+  const hours = Object.fromEntries(MEMBERS.map(m=>[m,0]));
+  state.res.forEach(r => { const s=Math.max(r.start,ws), e=Math.min(r.end,we); if (e>s) hours[r.who]+=(e-s)/3.6e6; });
+  const max = Math.max(1, ...Object.values(hours));
+  $("stats").innerHTML = MEMBERS.map(m => `<tr><td style="width:110px"><span class="dot" style="background:${colorOf(m)}"></span>${m}</td>
+    <td><div class="bar" style="width:${hours[m]/max*100}%;background:${colorOf(m)}"></div></td>
+    <td style="width:60px;text-align:right">${hours[m].toFixed(1)}h</td></tr>`).join("");
+}
+
+function showMsg(kind, text){ const m=$("msg"); m.className = "msg "+kind; m.innerHTML = text; }
+
+function renderAll(){ renderStatus(); renderCal(); renderList(); renderStats(); }
+
+function init(){
+  $("who").innerHTML = MEMBERS.map(m=>`<option>${m}</option>`).join("");
+  $("rules").innerHTML = [
+    `1회 예약은 최대 ${RULES.maxHours}시간`,
+    `같은 시간대 동시 사용 허용 — 단, VRAM 합계 ${RULES.vramMax}GB 이하, 최대 ${RULES.maxConcurrent}명`,
+    `동시 사용 시 연산 속도가 서로 느려질 수 있음`,
+    `6시간 이상 장기 학습은 야간(${RULES.nightLongJobsFrom}:00~${RULES.nightLongJobsTo}:00) 시작 권장`,
+    `같은 날 1인 ${RULES.maxPerDayPerPerson}건을 넘기면 경고`,
+    `예상 VRAM은 넉넉히 — 실제 사용량이 신청값을 넘지 않도록 설정 (예: PyTorch 메모리 상한)`,
+    `끝나면 프로세스를 정리하고 조기 종료 시 예약을 취소해 주세요`
+  ].map(t=>`<li>${t}</li>`).join("");
+  const n = new Date(); n.setMinutes(0,0,0); n.setHours(n.getHours()+1);
+  const e = new Date(n); e.setHours(e.getHours()+3);
+  $("sDate").value = ymd(n); $("sTime").value = hm(n); $("eDate").value = ymd(e); $("eTime").value = hm(e);
+  $("submit").onclick = () => {
+    const r = { id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()),
+      who: $("who").value, purpose: $("purpose").value, memo: $("memo").value.trim(), vram: Number($("vram").value),
+      start: new Date(`${$("sDate").value}T${$("sTime").value}`).getTime(),
+      end:   new Date(`${$("eDate").value}T${$("eTime").value}`).getTime() };
+    const {errs, warns} = validate(r);
+    if (errs.length) return showMsg("err", "예약할 수 없습니다.<br>· " + errs.join("<br>· "));
+    state.res.push(r); save(); weekStart = startOfWeek(new Date(r.start)); renderAll();
+    showMsg(warns.length ? "warn" : "ok", "예약했습니다." + (warns.length ? "<br>· " + warns.join("<br>· ") : ""));
+  };
+  $("prev").onclick = () => { weekStart = addDays(weekStart,-7); renderAll(); };
+  $("next").onclick = () => { weekStart = addDays(weekStart,7); renderAll(); };
+  $("thisWeek").onclick = () => { weekStart = startOfWeek(new Date()); renderAll(); };
+  renderAll();
+  setInterval(renderStatus, 60000);
+}
+init();
+</script>
+</body>
+</html>
